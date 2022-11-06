@@ -1,0 +1,4 @@
+---
+- hosts: perfectmediaserver
+  roles:
+    - ironicbadger.proxmox_nag_removal
