@@ -1,6 +1,9 @@
 pms:
 	ansible-playbook -b run.yaml --limit perfectmediaserver
 
+pcomp:
+	ansible-playbook -b run.yaml --limit perfectmediaserver --tags compose
+
 # Help Managing Roles from Ansible Galaxy
 reqs:
 	ansible-galaxy install -r requirements.yaml

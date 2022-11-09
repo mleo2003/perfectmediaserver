@@ -1,0 +1,13 @@
+---
+- name: systemd daemon-reload
+  command: systemctl daemon-reload
+
+- name: start samba service
+  service:
+    name: smbd
+    state: started
+
+- name: restart samba service
+  service:
+    name: smbd
+    state: restarted

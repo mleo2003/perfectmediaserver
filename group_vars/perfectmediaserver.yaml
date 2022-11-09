@@ -3,3 +3,347 @@
 target_os: proxmox
 main_username: pms
 
+# grog.package
+package_list:
+  - name: bash-completion
+  - name: curl
+  - name: dnsutils
+  - name: fio
+  - name: git
+  - name: hddtemp
+  - name: htop
+  - name: ffmpeg
+  - name: iftop
+  - name: intel-gpu-tools
+  - name: iotop
+  - name: ipmitool
+  - name: lm-sensors
+  - name: mc
+  - name: mergerfs
+  - name: mutt
+  - name: ncdu
+  - name: net-tools
+  - name: nut
+  - name: nut-client
+  - name: nut-server
+  - name: nfs-kernel-server
+  - name: nmap
+  - name: nvme-cli
+  - name: openssh-server
+  #- name: open-vm-tools #vmware
+  - name: python3
+  - name: python-setuptools
+  #- name: qemu-guest-agent
+  #- name: sanoid
+  - name: screen
+  #- name: ssh-import-id
+  - name: smartmontools
+  - name: sudo
+  - name: tmux
+  - name: tree
+  - name: wget
+  #- name: wireguard-tools
+  - name: xfsprogs
+  - name: zfsutils-linux
+
+# ironicbadger.bash-aliases (formerly ferrarimarco.bash-aliases)
+bash_aliases:
+  - { alias: "ll", command: "ls -lF "}
+  - { alias: "dtail", command: "docker logs -tf --tail='50' " }
+  - { alias: "dstop", command: "docker stop `docker ps -aq`" }
+  - { alias: "drm", command: "docker rm `docker ps -aq`" }
+  - { alias: "dcp", command: "docker-compose -f ~/docker-compose.yml "}
+  - { alias: "dcporph", command: "docker-compose -f ~/docker-compose.yml up -d --remove-orphans" }
+  - { alias: "dprune", command: "docker image prune" }
+  - { alias: "dprunesys", command: "docker system prune --all" }
+  - { alias: "dtop", command: "docker run --name ctop  -it --rm -v /var/run/docker.sock:/var/run/docker.sock quay.io/vektorlab/ctop" }
+  - { alias: "appdata", command: "cd /mnt/storage/appdata" }
+  - { alias: "zspace", command: "zfs list -o space" }
+  - { alias: "zsnap", command: "zfs list -o space | sort -k4 --human-numeric-sort" }
+  - { alias: "dfclean", command: "df -h -x tmpfs -t fuse.mergerfs -t xfs -t ext4 | sort -k 6" }
+  - { alias: "dffull", command: "df -h -x tmpfs -t fuse.mergerfs -t xfs -t ext4 -t zfs" }
+  - { alias: "hdtemp", command: "sudo hddtemp -q /dev/sd[a,b,c]" }
+  - { alias: "nvmetemp", command: "sudo /usr/sbin/nvme smart-log /dev/nvme0n1 | grep temperature" }
+
+# perfectmediaserver
+# snapraid_parity_disks:
+  # - { path: /mnt/parity1, diskbyid: /dev/disk/by-id/ata-WDC_WD140EDGZ-11B1PA0_Y6GX1KWC, fs: ext4, opts: defaults, content: false }
+
+snapraid_data_disks:
+  - { path: /mnt/disk1, diskbyid: /dev/disk/by-id/ata-ST4000DM000-1F2168_W300LXEZ, fs: ext4, opts: defaults, content: true }
+  - { path: /mnt/disk2, diskbyid: /dev/disk/by-id/ata-WDC_WD40EDAZ-11SLVB0_WD-WX72D50CPZDC, fs: ext4, opts: defaults, content: true }
+  - { path: /mnt/disk3, diskbyid: /dev/disk/by-id/ata-ST4000DM000-1F2168_W300HT8Z, fs: ext4, opts: defaults, content: true }
+
+fstab_mergerfs:
+  - { source: "/mnt/disk*", mountpoint: "/mnt/storage", fs: fuse.mergerfs, opts: "direct_io,defaults,allow_other,minfreespace=50G,fsname=mergerfs" }  
+
+# ironicbadger.docker_compose_generator
+appdata_path: /mnt/storage/appdata
+download_path: /mnt/storage/Downloads
+storage_path: /mnt/storage
+local_domain: "robinson.lan"
+
+extra_mountpoints:
+  - { path: "{{ storage_path }}" }
+
+containers:
+  ###
+  - service_name: tr
+    active: true
+    image: traefik
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    extra_hosts:
+      - host.docker.internal:172.17.0.1
+    volumes:
+      - "{{ appdata_path }}/traefik:/etc/traefik"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    restart: unless-stopped
+  ###
+  - service_name: filebrowser
+    active: true
+    image: filebrowser/filebrowser:s6
+    labels:
+      - "traefik.http.routers.fb.rule=Host(`files.{{ local_domain }}`) || PathPrefix(`/filebrowser/`)"
+    environment:
+      - FB_NOAUTH=noauth
+      - FB_BASEURL=/filebrowser
+    volumes:
+      - "{{ storage_path }}:/srv"
+      - "{{ appdata_path }}/filebrowser/filebrowser.db:/database.db"
+      - "{{ appdata_path }}/filebrowser/filebrowser.json:/.filebrowser.json"
+    include_global_env_vars: true
+    restart: unless-stopped
+  # ###
+  # - service_name: plex
+  #   active: true
+  #   image: plexinc/pms-docker
+  #   network_mode: host
+  #   devices:
+  #     - /dev/dri:/dev/dri
+  #   labels:
+  #     - "traefik.http.routers.plex.rule=Host(`plex.{{ domain_me }}`)"
+  #     - traefik.http.services.plex.loadbalancer.server.port=32400
+  #   volumes:
+  #     - "{{ appdata_path }}/plex/config:/config"
+  #     - "{{ appdata_path }}/plex/transcode:/transcode"
+  #     - "{{ storage_path }}:/data"
+  #   include_global_env_vars: true
+  #   restart: unless-stopped
+  # ###
+  # - service_name: plexmeta
+  #   active: true
+  #   image: meisnate12/plex-meta-manager
+  #   volumes:
+  #     - "{{ appdata_path }}/plexmeta/config:/config"
+  #   labels:
+  #     - traefik.enable=false
+  #   environment:
+  #     - TZ=America/Los_Angeles
+  #     - PMM_TIME=01:22
+  #   restart: unless-stopped
+  # ###
+  # - service_name: plextraktsync
+  #   active: true
+  #   image: ghcr.io/taxel/plextraktsync
+  #   volumes:
+  #     - "{{ appdata_path }}/plextraktsync/config:/app/config"
+  #   labels:
+  #     - traefik.enable=false
+  #   restart: unless-stopped
+  # ###
+  # - service_name: tautulli
+  #   active: true
+  #   image: linuxserver/tautulli
+  #   depends_on:
+  #     - plex
+  #   labels:
+  #     - "traefik.http.routers.tautulli.rule=Host(`tautulli.m.{{ local_domain }}`)"
+  #   volumes:
+  #     - "{{ appdata_path }}/tautulli:/config"
+  #     - "{{ appdata_path }}/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro"
+  #   include_global_env_vars: true
+  #   restart: unless-stopped
+  # ###
+  # - service_name: prowlarr
+  #   active: true
+  #   image: linuxserver/prowlarr:develop
+  #   labels:
+  #     - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.m.{{ local_domain }}`)"
+  #     - traefik.http.routers.prowlarr.middlewares=authelia@docker
+  #   volumes:
+  #     - "{{ appdata_path }}/prowlarr:/config"
+  #   include_global_env_vars: true
+  #   restart: unless-stopped
+  # ###
+  # - service_name: sonarr
+  #   active: true
+  #   image: linuxserver/sonarr
+  #   depends_on:
+  #     - nzbget
+  #   labels:
+  #     - "traefik.http.routers.sonarr.rule=Host(`sonarr.m.{{ local_domain }}`)"
+  #     - traefik.http.routers.sonarr.middlewares=authelia@docker
+  #   volumes:
+  #     - "{{ appdata_path }}/sonarr:/config"
+  #     - "{{ download_path }}/complete/tv:/downloads/complete/tv"
+  #     - /mnt/jbod/tv:/tv
+  #   restart: unless-stopped
+  #   include_global_env_vars: true
+  # ###
+  # - service_name: radarr
+  #   active: true
+  #   image: linuxserver/radarr
+  #   volumes:
+  #     - "{{ appdata_path }}/radarr:/config"
+  #     - "{{ download_path }}/complete/movies:/downloads/complete/movies"
+  #     - /mnt/jbod/movies:/movies
+  #   labels:
+  #     - "traefik.http.routers.radarr.rule=Host(`radarr.m.{{ local_domain }}`)"
+  #     - traefik.http.routers.radarr.middlewares=authelia@docker
+  #   restart: unless-stopped
+  #   include_global_env_vars: true
+  # ###
+  # - service_name: lidarr
+  #   active: true
+  #   image: linuxserver/lidarr
+  #   volumes:
+  #     - "{{ appdata_path }}/lidarr:/config"
+  #     - "{{ download_path }}/complete/music:/downloads/complete/music"
+  #     - "{{ download_path }}/intermediate/music:/downloads-amd"
+  #     - /mnt/storage/flac/flac:/music
+  #   labels:
+  #     - "traefik.http.routers.lidarr.rule=Host(`lidarr.m.{{ local_domain }}`)"
+  #     - traefik.http.routers.lidarr.middlewares=authelia@docker
+  #   restart: unless-stopped
+  #   include_global_env_vars: true
+  # ###
+  # - service_name: nextcloud
+  #   active: true
+  #   image: nextcloud:stable
+  #   depends_on:
+  #     - mysql
+  #   labels:
+  #     - "traefik.http.routers.nc.rule=Host(`nc.{{ domain_cloud }}`)"
+  #   volumes:
+  #     - "{{ appdata_path }}/nextcloud:/var/www/html"
+  #   restart: unless-stopped
+  # ###
+  # - service_name: mysql
+  #   active: true
+  #   image: mariadb
+  #   ports:
+  #     - 3306:3306
+  #   environment:
+  #     - "MYSQL_ROOT_PASSWORD={{ container_mysql_root_password }}"
+  #     - "MYSQL_PASSWORD={{ container_mysql_password }}"
+  #     - MYSQL_DATABASE=nextcloud
+  #     - MYSQL_USER=nextcloud
+  #   volumes:
+  #     - "{{ appdata_path }}/mysql:/var/lib/mysql"
+  #   restart: unless-stopped
+  # ###
+  # - service_name: librespeed
+  #   active: true
+  #   image: linuxserver/librespeed
+  #   ports:
+  #     - 8008:80
+  #   labels:
+  #     - "traefik.http.routers.librespeed.rule=Host(`speedtest.m.{{ local_domain }}`)"
+  #   environment:
+  #     - MODE=standalone
+  #     - TELEMETRY=true
+  #     - "PASSWORD={{ librespeed_password }}"
+  #   include_global_env_vars: true
+  #   restart: unless-stopped
+  # ###
+  # - service_name: lychee
+  #   active: true
+  #   image: lycheeorg/lychee
+  #   labels:
+  #     - "traefik.http.routers.lychee.rule=Host(`gallery.m.{{ local_domain }}`)"
+  #   depends_on:
+  #     - mysql
+  #   volumes:
+  #     - "{{ appdata_path }}/lychee/config:/config"
+  #     - "{{ appdata_path }}/lychee/uploads:/uploads"
+  #     - "{{ appdata_path }}/lychee/sym:/sym"
+  #   environment:
+  #     - PHP_TZ=America/Los_Angeles
+  #     - DB_CONNECTION=mysql
+  #     - DB_HOST=mysql
+  #     - DB_PORT=3306
+  #     - DB_USERNAME=lychee
+  #     - DB_DATABASE=lychee
+  #     - "DB_PASSWORD={{ container_mysql_password }}"
+  #   include_global_env_vars: true
+  #   restart: unless-stopped
+  # ###
+  # - service_name: paperless
+  #   active: false
+  #   image: ghcr.io/paperless-ngx/paperless-ngx:latest
+  #   labels:
+  #     - "traefik.http.routers.paperless.rule=Host(`paperless.m.{{ local_domain }}`)"
+  #   volumes:
+  #     - "{{ appdata_path }}/paperless/config:/config"
+  #     - "{{ appdata_path }}/paperless/data:/data"
+  #   environment:
+  #     - PAPERLESS_CONSUMER_RECURSIVE=true
+  #     - PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS=true
+  #   include_global_env_vars: true
+  #   restart: unless-stopped
+  # ###
+  # - service_name: mealie
+  #   active: true
+  #   image: hkotel/mealie:v0.5.1
+  #   labels:
+  #     - traefik.http.routers.mealie.rule=Host(`mealie.m.{{ local_domain }}`)
+  #   environment:
+  #     - DB_TYPE=sqlite
+  #   volumes:
+  #     - "{{ appdata_path }}/mealie:/app/data"
+  #   restart: unless-stopped  
+  # ###
+  # - service_name: abs
+  #   active: true
+  #   image: advplyr/audiobookshelf
+  #   labels:
+  #     - "traefik.http.routers.audiobookshelf.rule=Host(`abs.m.{{ local_domain }}`)"
+  #   volumes:
+  #     - "{{ storage_path }}/audiobooks/library:/audiobooks"
+  #     - "{{ storage_path }}/audiobooks/podcasts:/podcasts"
+  #     - "{{ appdata_path }}/audiobookshelf/metadata:/metadata"
+  #     - "{{ appdata_path }}/audiobookshelf/config:/config"
+  #   restart: unless-stopped
+  # ###
+  # - service_name: overseerr
+  #   active: true
+  #   image: sctx/overseerr:latest
+  #   labels:
+  #     - "traefik.http.routers.overseerr.rule=Host(`overseerr.m.{{ local_domain }}`)"
+  #   volumes:
+  #     - "{{ appdata_path }}/overseerr:/app/config"
+  #   restart: unless-stopped
+
+  # template for docker-compose services
+  #
+  ###
+  # - service_name:
+  #   active: false
+  #   image:
+  #   container_name: #optional - only required if diff to service_name
+  #   labels:
+  #     - traefik.enable=true
+  #     - "traefik.http.routers.XXXXXXXX.rule=Host(`abs.m.{{ local_domain }}`)"
+  #     #- traefik.http.routers.XXXXXXX.entrypoints=websecure
+  #     #- traefik.http.routers.XXXXXXX.tls.certresolver=cloudflare
+  #     - traefik.http.services.XXXXXXX.loadbalancer.server.port=80
+  #     #- traefik.http.routers.XXXXXXX.middlewares=authelia@docker
+  #   volumes:
+  #     - "{{ appdata_path }}/app:/config"
+  #   environment:
+  #     -
+  #   include_global_env_vars: #optional - defaults to false
+  #   restart: unless-stopped

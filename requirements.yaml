@@ -1,2 +1,15 @@
+- src: artis3n.tailscale
+
+- src: geerlingguy.docker
+- src: geerlingguy.docker_arm
+- src: geerlingguy.security
+- src: geerlingguy.ntp
+- src: geerlingguy.github-users
+- src: grog.package
+
+- src: ironicbadger.docker_compose_generator
+- src: ironicbadger.bash_aliases
+- src: ironicbadger.hddtemp
 - src: ironicbadger.proxmox_nag_removal
 
+- src: weareinteractive.environment

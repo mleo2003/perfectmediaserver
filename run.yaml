@@ -1,4 +1,16 @@
 ---
 - hosts: perfectmediaserver
+  vars_files:
+    - 'vars/vault.yaml'
   roles:
-    - ironicbadger.proxmox_nag_removal
+    - role: ironicbadger.proxmox_nag_removal
+    - role: geerlingguy.docker
+    - role: grog.package
+    - role: ironicbadger.hddtemp
+    - role: ironicbadger.bash_aliases
+    - role: perfectmediaserver
+    - role: ironicbadger.docker_compose_generator
+      tags: compose
+    - role: ktz-traefik
+      tags: compose
+    # - role: artis3n.tailscale
