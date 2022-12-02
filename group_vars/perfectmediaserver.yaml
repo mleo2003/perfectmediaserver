@@ -75,7 +75,7 @@ snapraid_data_disks:
   - { path: /mnt/disk3, diskbyid: /dev/disk/by-id/ata-ST4000DM000-1F2168_W300HT8Z, fs: ext4, opts: defaults, content: true }
 
 fstab_mergerfs:
-  - { source: "/mnt/disk*", mountpoint: "/mnt/storage", fs: fuse.mergerfs, opts: "direct_io,defaults,allow_other,minfreespace=50G,fsname=mergerfs" }  
+  - { source: "/mnt/disk*", mountpoint: "/mnt/storage", fs: fuse.mergerfs, opts: "direct_io,defaults,cache.files=partial,allow_other,minfreespace=50G,fsname=mergerfs" }  
 
 # ironicbadger.docker_compose_generator
 appdata_path: /mnt/storage/appdata
@@ -116,56 +116,33 @@ containers:
       - "{{ appdata_path }}/filebrowser/filebrowser.json:/.filebrowser.json"
     include_global_env_vars: true
     restart: unless-stopped
-  # ###
-  # - service_name: plex
-  #   active: true
-  #   image: plexinc/pms-docker
-  #   network_mode: host
-  #   devices:
-  #     - /dev/dri:/dev/dri
-  #   labels:
-  #     - "traefik.http.routers.plex.rule=Host(`plex.{{ domain_me }}`)"
-  #     - traefik.http.services.plex.loadbalancer.server.port=32400
-  #   volumes:
-  #     - "{{ appdata_path }}/plex/config:/config"
-  #     - "{{ appdata_path }}/plex/transcode:/transcode"
-  #     - "{{ storage_path }}:/data"
-  #   include_global_env_vars: true
-  #   restart: unless-stopped
-  # ###
-  # - service_name: plexmeta
-  #   active: true
-  #   image: meisnate12/plex-meta-manager
-  #   volumes:
-  #     - "{{ appdata_path }}/plexmeta/config:/config"
-  #   labels:
-  #     - traefik.enable=false
-  #   environment:
-  #     - TZ=America/Los_Angeles
-  #     - PMM_TIME=01:22
-  #   restart: unless-stopped
-  # ###
-  # - service_name: plextraktsync
-  #   active: true
-  #   image: ghcr.io/taxel/plextraktsync
-  #   volumes:
-  #     - "{{ appdata_path }}/plextraktsync/config:/app/config"
-  #   labels:
-  #     - traefik.enable=false
-  #   restart: unless-stopped
-  # ###
-  # - service_name: tautulli
-  #   active: true
-  #   image: linuxserver/tautulli
-  #   depends_on:
-  #     - plex
-  #   labels:
-  #     - "traefik.http.routers.tautulli.rule=Host(`tautulli.m.{{ local_domain }}`)"
-  #   volumes:
-  #     - "{{ appdata_path }}/tautulli:/config"
-  #     - "{{ appdata_path }}/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro"
-  #   include_global_env_vars: true
-  #   restart: unless-stopped
+  ###
+  - service_name: mealie
+    active: true
+    image: hkotel/mealie:v0.5.1
+    labels:
+      - "traefik.http.routers.mealie.rule=Host(`meals.{{ local_domain }}`)"
+    environment:
+      - DB_TYPE=sqlite
+      - BASE_URL=/meals
+    volumes:
+      - "{{ appdata_path }}/mealie:/app/data"
+    restart: unless-stopped  
+  ###
+  - service_name: jellyfin
+    active: true
+    image: jellyfin/jellyfin
+    network_mode: host
+    labels:
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.{{ local_domain }}`)"
+      - traefik.http.services.jellyfin.loadbalancer.server.port=8096
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - "{{ appdata_path }}/jellyfin/config:/config"
+      - "{{ appdata_path }}/jellyfin/cache:/cache"
+      - "{{ storage_path }}:/media"
+    restart: unless-stopped
   # ###
   # - service_name: prowlarr
   #   active: true
@@ -294,17 +271,6 @@ containers:
   #     - PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS=true
   #   include_global_env_vars: true
   #   restart: unless-stopped
-  # ###
-  # - service_name: mealie
-  #   active: true
-  #   image: hkotel/mealie:v0.5.1
-  #   labels:
-  #     - traefik.http.routers.mealie.rule=Host(`mealie.m.{{ local_domain }}`)
-  #   environment:
-  #     - DB_TYPE=sqlite
-  #   volumes:
-  #     - "{{ appdata_path }}/mealie:/app/data"
-  #   restart: unless-stopped  
   # ###
   # - service_name: abs
   #   active: true
