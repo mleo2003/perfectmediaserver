@@ -52,8 +52,8 @@ bash_aliases:
   - { alias: "dtail", command: "docker logs -tf --tail='50' " }
   - { alias: "dstop", command: "docker stop `docker ps -aq`" }
   - { alias: "drm", command: "docker rm `docker ps -aq`" }
-  - { alias: "dcp", command: "docker-compose -f ~/docker-compose.yml "}
-  - { alias: "dcporph", command: "docker-compose -f ~/docker-compose.yml up -d --remove-orphans" }
+  - { alias: "dcp", command: "docker compose -f ~/docker-compose.yml "}
+  - { alias: "dcporph", command: "docker compose -f ~/docker-compose.yml up -d --remove-orphans" }
   - { alias: "dprune", command: "docker image prune" }
   - { alias: "dprunesys", command: "docker system prune --all" }
   - { alias: "dtop", command: "docker run --name ctop  -it --rm -v /var/run/docker.sock:/var/run/docker.sock quay.io/vektorlab/ctop" }
@@ -75,12 +75,12 @@ snapraid_data_disks:
   - { path: /mnt/disk3, diskbyid: /dev/disk/by-id/ata-ST4000DM000-1F2168_W300HT8Z, fs: ext4, opts: defaults, content: true }
 
 fstab_mergerfs:
-  - { source: "/mnt/disk*", mountpoint: "/mnt/storage", fs: fuse.mergerfs, opts: "direct_io,defaults,cache.files=partial,allow_other,minfreespace=50G,fsname=mergerfs" }  
+  - { source: "/mnt/disk*", mountpoint: "/mnt/storage", fs: fuse.mergerfs, opts: "use_ino,dropcacheonclose=true,cache.files=partial,defaults,allow_other,category.create=mfs,minfreespace=50G,fsname=mergerfs" }  
 
 # ironicbadger.docker_compose_generator
 appdata_path: /mnt/storage/appdata
-download_path: /mnt/storage/Downloads
 storage_path: /mnt/storage
+internal_storage_path: /storage
 local_domain: "robinson.lan"
 
 extra_mountpoints:
@@ -102,20 +102,16 @@ containers:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
     restart: unless-stopped
   ###
-  - service_name: filebrowser
+  - service_name: heimdall
     active: true
-    image: filebrowser/filebrowser:s6
+    image: lscr.io/linuxserver/heimdall:latest
     labels:
-      - "traefik.http.routers.fb.rule=Host(`files.{{ local_domain }}`) || PathPrefix(`/filebrowser/`)"
+      - "traefik.http.routers.heimdall.rule=Host(`{{ local_domain }}`)"
     environment:
-      - FB_NOAUTH=noauth
-      - FB_BASEURL=/filebrowser
+      - TZ=America/Los_Angeles
     volumes:
-      - "{{ storage_path }}:/srv"
-      - "{{ appdata_path }}/filebrowser/filebrowser.db:/database.db"
-      - "{{ appdata_path }}/filebrowser/filebrowser.json:/.filebrowser.json"
-    include_global_env_vars: true
-    restart: unless-stopped
+      - "{{ appdata_path }}/heimdall:/config"
+    restart: unless-stopped  
   ###
   - service_name: mealie
     active: true
@@ -130,7 +126,7 @@ containers:
     restart: unless-stopped  
   ###
   - service_name: jellyfin
-    active: true
+    active: false
     image: jellyfin/jellyfin
     network_mode: host
     labels:
@@ -143,59 +139,205 @@ containers:
       - "{{ appdata_path }}/jellyfin/cache:/cache"
       - "{{ storage_path }}:/media"
     restart: unless-stopped
-  # ###
-  # - service_name: prowlarr
-  #   active: true
-  #   image: linuxserver/prowlarr:develop
-  #   labels:
-  #     - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.m.{{ local_domain }}`)"
-  #     - traefik.http.routers.prowlarr.middlewares=authelia@docker
-  #   volumes:
-  #     - "{{ appdata_path }}/prowlarr:/config"
-  #   include_global_env_vars: true
-  #   restart: unless-stopped
-  # ###
-  # - service_name: sonarr
-  #   active: true
-  #   image: linuxserver/sonarr
-  #   depends_on:
-  #     - nzbget
-  #   labels:
-  #     - "traefik.http.routers.sonarr.rule=Host(`sonarr.m.{{ local_domain }}`)"
-  #     - traefik.http.routers.sonarr.middlewares=authelia@docker
-  #   volumes:
-  #     - "{{ appdata_path }}/sonarr:/config"
-  #     - "{{ download_path }}/complete/tv:/downloads/complete/tv"
-  #     - /mnt/jbod/tv:/tv
-  #   restart: unless-stopped
-  #   include_global_env_vars: true
-  # ###
-  # - service_name: radarr
-  #   active: true
-  #   image: linuxserver/radarr
-  #   volumes:
-  #     - "{{ appdata_path }}/radarr:/config"
-  #     - "{{ download_path }}/complete/movies:/downloads/complete/movies"
-  #     - /mnt/jbod/movies:/movies
-  #   labels:
-  #     - "traefik.http.routers.radarr.rule=Host(`radarr.m.{{ local_domain }}`)"
-  #     - traefik.http.routers.radarr.middlewares=authelia@docker
-  #   restart: unless-stopped
-  #   include_global_env_vars: true
-  # ###
-  # - service_name: lidarr
-  #   active: true
-  #   image: linuxserver/lidarr
-  #   volumes:
-  #     - "{{ appdata_path }}/lidarr:/config"
-  #     - "{{ download_path }}/complete/music:/downloads/complete/music"
-  #     - "{{ download_path }}/intermediate/music:/downloads-amd"
-  #     - /mnt/storage/flac/flac:/music
-  #   labels:
-  #     - "traefik.http.routers.lidarr.rule=Host(`lidarr.m.{{ local_domain }}`)"
-  #     - traefik.http.routers.lidarr.middlewares=authelia@docker
-  #   restart: unless-stopped
-  #   include_global_env_vars: true
+  ###
+  - service_name: syncthing
+    active: true
+    image: lscr.io/linuxserver/syncthing:latest
+    network_mode: host
+    labels:
+      - "traefik.http.routers.syncthing.rule=Host(`syncthing.{{ local_domain }}`)"
+      - traefik.http.services.syncthing.loadbalancer.server.port=8384
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - "{{ appdata_path }}/syncthing:/config"
+      - "{{ storage_path }}/Sync:/data"
+    restart: unless-stopped
+  ###
+  - service_name: archivebox
+    active: true
+    image: archivebox/archivebox:master
+    command: 
+      - server --quick-init 0.0.0.0:8000
+    labels:
+      - "traefik.http.routers.archivebox.rule=Host(`archive.{{ local_domain }}`)"
+      - traefik.http.services.archivebox.loadbalancer.server.port=8000
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+      - ALLOWED_HOSTS=*
+      - MEDIA_MAX_SIZE=750m
+    volumes:
+      - "{{ appdata_path }}/archivebox:/data"
+    restart: unless-stopped
+  ###
+  - service_name: transmission
+    active: true
+    image: haugene/transmission-openvpn
+    cap_add:
+      - NET_ADMIN
+    labels:
+      - "traefik.http.routers.transmission.rule=Host(`transmission.{{ local_domain }}`)"
+      - traefik.http.services.transmission.loadbalancer.server.port=9091
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - OPENVPN_PROVIDER=MULLVAD
+      - OPENVPN_CONFIG=de_all
+      - "OPENVPN_USERNAME={{ mullvad_username }}"
+      - "OPENVPN_PASSWORD={{ mullvad_password }}"
+      - LOCAL_NETWORK=192.168.1.0/24
+      - "TRANSMISSION_DOWNLOAD_DIR=/storage/Downloads/"
+      - "TRANSMISSION_INCOMPLETE_DIR=/storage/incomplete/"
+    ports:
+      - '9091:9091'
+      - '9696:9696'
+      - '8989:8989'
+      - '7878:7878'
+      - '8686:8686'
+    volumes:
+      - "{{ appdata_path }}/transmission:/config"
+      - "{{ storage_path }}:{{ internal_storage_path }}"
+    restart: unless-stopped
+    sysctl:
+      - "net.ipv6.conf.all.disable_ipv6=0"
+  ###
+  - service_name: prowlarr
+    active: true
+    image: linuxserver/prowlarr:develop
+    labels:
+      - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.{{ local_domain }}`)"
+      - traefik.http.services.prowlarr.loadbalancer.server.port=9696
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - "{{ appdata_path }}/prowlarr:/config"
+    restart: unless-stopped
+    network_mode: "service:transmission"
+    depends_on:
+      - transmission
+  ###
+  - service_name: sonarr
+    active: true
+    image: linuxserver/sonarr
+    labels:
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.{{ local_domain }}`)"
+      - traefik.http.services.sonarr.loadbalancer.server.port=8989
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - "{{ appdata_path }}/sonarr:/config"
+      - "{{ storage_path }}:{{ internal_storage_path }}"
+    restart: unless-stopped
+    network_mode: "service:transmission"
+    depends_on:
+      - transmission
+  ###
+  - service_name: radarr
+    active: true
+    image: linuxserver/radarr
+    labels:
+      - "traefik.http.routers.radarr.rule=Host(`radarr.{{ local_domain }}`)"
+      - traefik.http.services.radarr.loadbalancer.server.port=7878
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    volumes:
+      - "{{ appdata_path }}/radarr:/config"
+      - "{{ storage_path }}:{{ internal_storage_path }}"
+    restart: unless-stopped
+    network_mode: "service:transmission"
+    depends_on:
+      - transmission
+  ###
+  - service_name: beets
+    active: true
+    image: lscr.io/linuxserver/beets:latest
+    volumes:
+      - "{{ appdata_path }}/beets:/config"
+      - "{{ storage_path }}:{{ internal_storage_path }}"
+    labels:
+      - "traefik.http.routers.beets.rule=Host(`beets.{{ local_domain }}`)"
+      - traefik.http.services.beets.loadbalancer.server.port=8337
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    restart: unless-stopped
+  ###
+  - service_name: calibre-web
+    active: true
+    image: lscr.io/linuxserver/calibre-web:latest
+    volumes:
+      - "{{ appdata_path }}/calibre-web:/config"
+      - "{{ storage_path }}:{{ internal_storage_path }}"
+    labels:
+      - "traefik.http.routers.calibre-web.rule=Host(`calibreweb.{{ local_domain }}`)"
+      - traefik.http.services.calibre-web.loadbalancer.server.port=8083
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+      - DOCKER_MODS=linuxserver/mods:universal-calibre
+    restart: unless-stopped
+  ###
+  - service_name: calibre
+    active: true
+    image: lscr.io/linuxserver/calibre:latest
+    volumes:
+      - "{{ appdata_path }}/calibre:/config"
+      - "{{ storage_path }}:{{ internal_storage_path }}"
+    labels:
+      - "traefik.http.routers.calibre.rule=Host(`calibre.{{ local_domain }}`)"
+      - traefik.http.services.calibre.loadbalancer.server.port=8080
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    restart: unless-stopped
+  ###
+  - service_name: freshrss
+    active: true
+    image: lscr.io/linuxserver/freshrss:latest
+    volumes:
+      - "{{ appdata_path }}/freshrss:/config"
+    labels:
+      - "traefik.http.routers.freshrss.rule=Host(`freshrss.{{ local_domain }}`)"
+      - traefik.http.services.freshrss.loadbalancer.server.port=80
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Los_Angeles
+    restart: unless-stopped
+  ###
+  - service_name: recoll
+    active: true
+    image: ngtmeaty/docker-recoll-webui:0.3
+    volumes:
+      - "{{ appdata_path }}/recoll:/root/.recoll"
+      - "{{ storage_path }}:/books"
+    labels:
+      - "traefik.http.routers.recoll.rule=Host(`recoll.{{ local_domain }}`)"
+      - traefik.http.services.recoll.loadbalancer.server.port=8080
+    restart: unless-stopped
+  ###
+  - service_name: dozzle
+    active: true
+    image: amir20/dozzle:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "traefik.http.routers.dozzle.rule=Host(`dozzle.{{ local_domain }}`)"
+      - traefik.http.services.dozzle.loadbalancer.server.port=8080
+    restart: unless-stopped
   # ###
   # - service_name: nextcloud
   #   active: true
